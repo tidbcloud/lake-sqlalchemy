@@ -11,7 +11,7 @@ jobs:
     runs-on: ubuntu-latest
     services:
       tidbcloudlake:
-        image: datafuselabs/tidbcloudlake:nightly
+        image: datafuselabs/databend:nightly
         env:
           QUERY_DEFAULT_USER: tidbcloudlake
           QUERY_DEFAULT_PASSWORD: tidbcloudlake
@@ -35,12 +35,13 @@ jobs:
 
       - name: Verify Service Running
         run: |
-          cid=$(docker ps -a | grep tidbcloudlake | cut -d' ' -f1)
-          docker logs ${cid}
+          cid=$(docker ps -aq --filter "ancestor=datafuselabs/databend:nightly" | head -n1)
+          test -n "${cid}"
+          docker logs "${cid}"
           curl -v http://localhost:8000/v1/health
 
       - name: SQLAlchemy Test Suite
         env:
-          TEST_DATABEND_DSN: "tidbcloudlake://tidbcloudlake:tidbcloudlake@localhost:8000/default?sslmode=disable"
+          TEST_DATABEND_DSN: "lake://tidbcloudlake:tidbcloudlake@localhost:8000/default?sslmode=disable"
         run: |
           pipenv run pytest -s .

@@ -1408,7 +1408,7 @@ class TiDBCloudLakeDialect(default.DefaultDialect):
     supports_empty_insert = False
     supports_is_distinct_from = True
     supports_multivalues_insert = True
-    supports_sequences = True
+    supports_sequences = False
 
     supports_statement_cache = False
     supports_server_side_cursors = True
