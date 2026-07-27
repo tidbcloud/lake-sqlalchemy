@@ -36,8 +36,7 @@ The DSN format is similar to that of regular Postgres::
 Merge Command Support
 ---------------------
 
-TiDB Cloud Lake SQLAlchemy supports upserts via its `Merge` custom expression.
-See [Merge](https://docs.tidbcloudlake.com/sql/sql-commands/dml/dml-merge) for full documentation.
+TiDB Cloud Lake SQLAlchemy supports upserts via its ``Merge`` custom expression. See `Merge <https://docs.pingcap.com/tidbcloudlake/merge/>`_ for full documentation.
 
 The Merge command can be used as below::
 
@@ -65,8 +64,7 @@ The Merge command can be used as below::
 Copy Into Command Support
 ---------------------
 
-TiDB Cloud Lake SQLAlchemy supports copy into operations through it's CopyIntoTable and CopyIntoLocation methods
-See [CopyIntoLocation](https://docs.tidbcloudlake.com/sql/sql-commands/dml/dml-copy-into-location) or [CopyIntoTable](https://docs.tidbcloudlake.com/sql/sql-commands/dml/dml-copy-into-table) for full documentation.
+TiDB Cloud Lake SQLAlchemy supports copy into operations through it's CopyIntoTable and CopyIntoLocation methods. See `CopyIntoLocation <https://docs.pingcap.com/tidbcloudlake/copy-into-location/>`_ or `CopyIntoTable <https://docs.pingcap.com/tidbcloudlake/copy-into-table/>`_ for full documentation.
 
 The CopyIntoTable command can be used as below::
 
