@@ -22,6 +22,7 @@ from tidbcloudlake_sqlalchemy import (
     CopyIntoLocationOptions,
     CSVFormat,
     ParquetFormat,
+    AmazonS3,
     GoogleCloudStorage,
     Compression,
     FileColumnClause,
@@ -34,6 +35,73 @@ from packaging import version
 class CompileTiDBCloudLakeCopyIntoTableTest(fixtures.TestBase, AssertsCompiledSQL):
 
     __only_on__ = "tidbcloudlake"
+
+    def test_copy_into_table_amazon_s3_without_optional_parameters(self):
+        m = MetaData()
+        tbl = Table(
+            "atable",
+            m,
+            Column("id", Integer),
+            schema="test_schema",
+        )
+
+        copy_into = CopyIntoTable(
+            target=tbl,
+            from_=AmazonS3(
+                uri="s3://some-bucket/a/path/to/files",
+                access_key_id="ACCESS_KEY",
+                secret_access_key="SECRET_KEY",
+            ),
+            file_format=ParquetFormat(),
+        )
+
+        self.assert_compile(
+            copy_into,
+            (
+                "COPY INTO test_schema.atable"
+                " FROM 's3://some-bucket/a/path/to/files' "
+                "CONNECTION = ("
+                "  ACCESS_KEY_ID = 'ACCESS_KEY' "
+                "  SECRET_ACCESS_KEY = 'SECRET_KEY'"
+                ") FILE_FORMAT = (TYPE = PARQUET)"
+            ),
+        )
+
+    def test_copy_into_table_amazon_s3_with_partial_optional_parameters(self):
+        m = MetaData()
+        tbl = Table(
+            "atable",
+            m,
+            Column("id", Integer),
+            schema="test_schema",
+        )
+
+        copy_into = CopyIntoTable(
+            target=tbl,
+            from_=AmazonS3(
+                uri="s3://some-bucket/a/path/to/files",
+                access_key_id="ACCESS_KEY",
+                secret_access_key="SECRET_KEY",
+                endpoint_url="https://s3.example.com",
+                enable_virtual_host_style=False,
+                region="us-west-2",
+            ),
+            file_format=ParquetFormat(),
+        )
+
+        self.assert_compile(
+            copy_into,
+            (
+                "COPY INTO test_schema.atable"
+                " FROM 's3://some-bucket/a/path/to/files' "
+                "CONNECTION = ("
+                "  ACCESS_KEY_ID = 'ACCESS_KEY' "
+                "  SECRET_ACCESS_KEY = 'SECRET_KEY'"
+                "  ENDPOINT_URL = 'https://s3.example.com' "
+                "  REGION = 'us-west-2'"
+                ") FILE_FORMAT = (TYPE = PARQUET)"
+            ),
+        )
 
     def test_copy_into_table(self):
         m = MetaData()
@@ -264,5 +332,3 @@ class CopyIntoResultTest(fixtures.TablesTest):
             eq_(result['errors_seen'], 0)
             eq_(result['first_error'], None)
             eq_(result['first_error_line'], None)
-
-

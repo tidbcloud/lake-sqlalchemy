@@ -518,16 +518,11 @@ class AmazonS3(_StorageClause):
         self.secret_access_key = secret_access_key
         self.bucket = r.netloc
         self.path = r.path
-        if endpoint_url:
-            self.endpoint_url = endpoint_url
-        if enable_virtual_host_style:
-            self.enable_virtual_host_style = enable_virtual_host_style
-        if master_key:
-            self.master_key = master_key
-        if region:
-            self.region = region
-        if security_token:
-            self.security_token = security_token
+        self.endpoint_url = endpoint_url
+        self.enable_virtual_host_style = enable_virtual_host_style
+        self.master_key = master_key
+        self.region = region
+        self.security_token = security_token
 
     def __repr__(self):
         return (
