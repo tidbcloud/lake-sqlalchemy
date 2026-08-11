@@ -53,7 +53,7 @@ The Merge command can be used as below::
 
 
 Copy Into Command Support
----------------------
+-------------------------
 
 TiDB Cloud Lake SQLAlchemy supports copy into operations through its
 ``CopyIntoTable`` and ``CopyIntoLocation`` methods. See `CopyIntoLocation <https://docs.pingcap.com/tidbcloudlake/copy-into-location/>`_ or `CopyIntoTable <https://docs.pingcap.com/tidbcloudlake/copy-into-table/>`_ for full documentation.
