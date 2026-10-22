@@ -15,10 +15,11 @@ jobs:
         env:
           QUERY_DEFAULT_USER: tidbcloudlake
           QUERY_DEFAULT_PASSWORD: tidbcloudlake
-          MINIO_ENABLED: true
+          # No object-storage I/O is exercised by this suite. Avoid the image
+          # bootstrap downloading a MinIO binary from a retired endpoint.
+          QUERY_STORAGE_TYPE: fs
         ports:
           - 8000:8000
-          - 9000:9000
     steps:
       - name: Checkout
         uses: actions/checkout@v4
@@ -31,14 +32,29 @@ jobs:
       - name: Pip Install
         run: |
           pip install pipenv
-          pipenv install --dev --skip-lock
+          pipenv verify
+          pipenv sync --dev
 
       - name: Verify Service Running
         run: |
           cid=$(docker ps -aq --filter "ancestor=datafuselabs/databend:nightly" | head -n1)
           test -n "${cid}"
-          docker logs "${cid}"
-          curl -v http://localhost:8000/v1/health
+          if ! curl --fail --silent --show-error \
+            --retry 30 --retry-all-errors --retry-delay 2 --max-time 5 \
+            --user tidbcloudlake:tidbcloudlake \
+            --header 'Content-Type: application/json' \
+            --data '{"sql":"SELECT 1"}' \
+            http://localhost:8000/v1/query > /tmp/lake-readiness.json; then
+            docker logs "${cid}"
+            exit 1
+          fi
+          python - <<'PYCODE'
+          import json
+          with open("/tmp/lake-readiness.json") as response:
+              result = json.load(response)
+          assert not result.get("error"), result
+          assert result.get("data"), result
+          PYCODE
 
       - name: SQLAlchemy Test Suite
         env:

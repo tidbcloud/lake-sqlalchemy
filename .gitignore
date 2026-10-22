@@ -107,3 +107,7 @@ ENV/
 
 # vim
 *.swp
+
+# Local dependency validation environments
+.venv/
+.venv-superset/

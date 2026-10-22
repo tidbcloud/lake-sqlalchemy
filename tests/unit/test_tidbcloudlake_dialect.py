@@ -46,7 +46,7 @@ class TestTiDBCloudLakeDialect:
         u = url.make_url("lake://user:pass@host:443/db?warehouse=test&secure=True")
         args, kwargs = dialect.create_connect_args(u)
         assert args == []
-        assert kwargs["dsn"] == "lake://user:pass@host:443/db?warehouse=test&secure=True"
+        assert url.make_url(kwargs["dsn"]) == u
 
     def test_do_execute(
             self, dialect: TiDBCloudLakeDialect, cursor: mock.Mock(spec=MockCursor)
@@ -110,6 +110,7 @@ class TestTiDBCloudLakeDialect:
             self, dialect: TiDBCloudLakeDialect, connection: mock.Mock(spec=MockDBApi)
     ):
         connection.execute.return_value = []
+        dialect.server_version_info = (1, 2, 881)
         assert dialect.get_view_names(connection) == []
 
     def test_indexes(
@@ -129,14 +130,14 @@ class TestTiDBCloudLakeDialect:
             return mock.Mock(__getitem__=getitem)
 
         connection.execute.return_value = [
-            multi_column_row(["name1", "INT", "YES"]),
-            multi_column_row(["name2", "date", "NO"]),
-            multi_column_row(["name3", "boolean", "YES"]),
-            multi_column_row(["name4", "binary", "YES"])
+            multi_column_row(["name1", "INT", "YES", None]),
+            multi_column_row(["name2", "date", "NO", None]),
+            multi_column_row(["name3", "boolean", "YES", None]),
+            multi_column_row(["name4", "binary", "YES", "binary column"])
         ]
 
         expected_query = """
-            select column_name, column_type, is_nullable
+            select column_name, data_type, is_nullable, nullif(column_comment, '')
             from information_schema.columns
             where table_name = :table_name
             and table_schema = :schema_name
@@ -153,30 +154,35 @@ class TestTiDBCloudLakeDialect:
                 ),
         ):
             result = call()
-            assert result == [
+            # Reflection returns TypeEngine instances, not their classes.
+            assert [{**column, "type": type(column["type"])} for column in result] == [
                 {
                     "name": "name1",
                     "type": INTEGER,
                     "nullable": True,
                     "default": None,
+                    "comment": None,
                 },
                 {
                     "name": "name2",
                     "type": TiDBCloudLakeDate,
                     "nullable": False,
                     "default": None,
+                    "comment": None,
                 },
                 {
                     "name": "name3",
                     "type": BOOLEAN,
                     "nullable": True,
                     "default": None,
+                    "comment": None,
                 },
                 {
                     "name": "name4",
                     "type": BINARY,
                     "nullable": True,
                     "default": None,
+                    "comment": "binary column",
                 },
             ]
             connection.execute.assert_called_once()

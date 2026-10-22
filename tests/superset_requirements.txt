@@ -1,6 +1,7 @@
-apache_superset>=2.0.0
-flask==2.0.3
-MarkupSafe==2.0.1
-Jinja2==3.0.3
-werkzeug==2.0.3
-WTForms==2.3.3
+# Superset 6 supports Flask 3; old Flask/Werkzeug 2.0 pins were vulnerable.
+apache-superset>=6.1.0,<7
+Flask>=3.1.3,<4
+Werkzeug>=3.1.9,<4
+MarkupSafe>=2.1.5,<4
+Jinja2>=3.1.6,<4
+WTForms>=3.1.0,<4

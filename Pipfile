@@ -4,10 +4,12 @@ verify_ssl = true
 name = "pypi"
 
 [packages]
-databend-sqlalchemy = {file = ".", editable = true}
+tidbcloudlake-sqlalchemy = {file = ".", editable = true}
+# The upstream conformance tests import SQLAlchemy 2.0-only test classes.
+sqlalchemy = ">=2.0,<2.1"
 
 [dev-packages]
-black = "*"
+black = ">=26.3.1"
 flake8 = "*"
 pytest = "*"
 pytest-xdist = "*"
