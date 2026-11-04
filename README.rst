@@ -231,3 +231,16 @@ Release Notes
   ``schema.table``; use ``str(stmt)`` to compile the statement.
 * ``ParamEscaper.escape_args`` error messages now report the parameter *type* (e.g. ``Unsupported param
   format: SecretParams``) instead of interpolating the parameter values into the exception text.
+COPY values and diagnostics
+---------------------------
+
+COPY filenames, patterns, storage URI/credentials and stage locations are
+compiled as data with Lake's string escaping. Existing simple stage locations,
+keyword/numeric COPY options and quoted option values retain their semantics.
+An option string cannot append arbitrary SQL clauses; use an explicit
+SQLAlchemy SQL expression when intentionally supplying trusted SQL.
+
+DBAPI error messages and SQLAlchemy engine diagnostics redact credential
+assignments and credential-bearing URLs. Actual DSNs and SQL sent to the
+driver retain their values. These protections cover this dialect's diagnostic
+paths; applications remain responsible for their own logs and tracing.

@@ -3,6 +3,7 @@
 # Note: parts of the file come from https://github.com/snowflakedb/snowflake-sqlalchemy
 #       licensed under the same Apache 2.0 License
 from enum import Enum
+from .sql_literals import string_literal
 from types import NoneType
 from urllib.parse import urlparse, urlunparse
 
@@ -342,19 +343,19 @@ class CSVFormat(CopyFormat):
                 and record_delimiter != "\r\n"
             ):
                 raise TypeError("Record Delimiter should be a single character.")
-            self.options["RECORD_DELIMITER"] = f"{repr(record_delimiter)}"
+            self.options["RECORD_DELIMITER"] = string_literal(record_delimiter)
         if field_delimiter:
             if len(str(field_delimiter).encode().decode("unicode_escape")) != 1:
                 raise TypeError("Field Delimiter should be a single character")
-            self.options["FIELD_DELIMITER"] = f"{repr(field_delimiter)}"
+            self.options["FIELD_DELIMITER"] = string_literal(field_delimiter)
         if quote:
             if quote not in ["'", '"', "`"]:
                 raise TypeError("Quote character must be one of [', \", `].")
-            self.options["QUOTE"] = f"{repr(quote)}"
+            self.options["QUOTE"] = string_literal(quote)
         if escape:
             if escape not in ["\\", ""]:
                 raise TypeError('Escape character must be "\\" or "".')
-            self.options["ESCAPE"] = f"{repr(escape)}"
+            self.options["ESCAPE"] = string_literal(escape)
         if skip_header:
             if skip_header < 0:
                 raise TypeError("Skip header must be positive integer.")
@@ -362,9 +363,9 @@ class CSVFormat(CopyFormat):
         if nan_display:
             if nan_display not in ["NULL", "NaN"]:
                 raise TypeError('NaN Display should be "NULL" or "NaN".')
-            self.options["NAN_DISPLAY"] = f"'{nan_display}'"
+            self.options["NAN_DISPLAY"] = string_literal(nan_display)
         if null_display:
-            self.options["NULL_DISPLAY"] = f"'{null_display}'"
+            self.options["NULL_DISPLAY"] = string_literal(null_display)
         if error_on_column_mismatch:
             self.options["ERROR_ON_COLUMN_MISMATCH"] = str(
                 error_on_column_mismatch
@@ -402,11 +403,11 @@ class TSVFormat(CopyFormat):
                 and record_delimiter != "\r\n"
             ):
                 raise TypeError("Record Delimiter should be a single character.")
-            self.options["RECORD_DELIMITER"] = f"{repr(record_delimiter)}"
+            self.options["RECORD_DELIMITER"] = string_literal(record_delimiter)
         if field_delimiter:
             if len(str(field_delimiter).encode().decode("unicode_escape")) != 1:
                 raise TypeError("Field Delimiter should be a single character")
-            self.options["FIELD_DELIMITER"] = f"{repr(field_delimiter)}"
+            self.options["FIELD_DELIMITER"] = string_literal(field_delimiter)
         if compression:
             self.options["COMPRESSION"] = compression.value
 

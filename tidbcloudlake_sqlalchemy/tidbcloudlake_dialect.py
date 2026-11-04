@@ -29,6 +29,9 @@ import operator
 import datetime
 from types import NoneType
 
+from .sql_literals import string_literal, option_name, option_value
+from .diagnostics import install_engine_diagnostics
+
 import sqlalchemy.engine.reflection
 import sqlalchemy.types as sqltypes
 from typing import Any, Dict, Optional, Union, List
@@ -1076,10 +1079,10 @@ class TiDBCloudLakeCompiler(PGCompiler):
 
         result = f"COPY INTO {target}" f" FROM {source}"
         if hasattr(copy_into, "files") and isinstance(copy_into.files, list):
-            quoted_files = [f"'{f}'" for f in copy_into.files]
+            quoted_files = [self._copy_string(f) for f in copy_into.files]
             result += f" FILES = ({', '.join(quoted_files)})"
         if hasattr(copy_into, "pattern") and copy_into.pattern:
-            result += f" PATTERN = '{copy_into.pattern}'"
+            result += f" PATTERN = {self._copy_string(copy_into.pattern)}"
         if not isinstance(copy_into.file_format, NoneType):
             result += f" {copy_into.file_format._compiler_dispatch(self, **kw)}\n"
         if not isinstance(copy_into.options, NoneType):
@@ -1093,21 +1096,12 @@ class TiDBCloudLakeCompiler(PGCompiler):
             options_list.sort(key=operator.itemgetter(0))
         # predefined format name
         if "format_name" in file_format.options:
-            return f"FILE_FORMAT=(format_name = {file_format.options['format_name']})"
+            return f"FILE_FORMAT=(format_name = {self._copy_option(file_format.options['format_name'], **kw)})"
         # format specifics
-        format_options = [f"TYPE = {file_format.format_type}"]
+        format_options = [f"TYPE = {option_name(file_format.format_type)}"]
         format_options.extend(
-            [
-                "{} = {}".format(
-                    option,
-                    (
-                        value._compiler_dispatch(self, **kw)
-                        if hasattr(value, "_compiler_dispatch")
-                        else str(value)
-                    ),
-                )
-                for option, value in options_list
-            ]
+            f"{option_name(option)} = {self._copy_option(value, **kw)}"
+            for option, value in options_list
         )
         return f"FILE_FORMAT = ({', '.join(format_options)})"
 
@@ -1115,7 +1109,7 @@ class TiDBCloudLakeCompiler(PGCompiler):
         options_list = list(copy_into_options.options.items())
         # if kw.get("deterministic", False):
         #     options_list.sort(key=operator.itemgetter(0))
-        return "\n".join([f"{k} = {v}" for k, v in options_list])
+        return "\n".join(f"{option_name(k)} = {self._copy_option(v, **kw)}" for k, v in options_list)
 
     def visit_file_column(self, file_column_clause, **kw):
         if isinstance(file_column_clause.from_, (TableClause,)):
@@ -1135,54 +1129,58 @@ class TiDBCloudLakeCompiler(PGCompiler):
             )
         return f"SELECT {select_str}" f" FROM {source}"
 
-    def visit_amazon_s3(self, amazon_s3: AmazonS3, **kw):
-        connection_params_str = f"  ACCESS_KEY_ID = '{amazon_s3.access_key_id}' \n"
-        connection_params_str += (
-            f"  SECRET_ACCESS_KEY = '{amazon_s3.secret_access_key}'\n"
-        )
-        if amazon_s3.endpoint_url:
-            connection_params_str += f"  ENDPOINT_URL = '{amazon_s3.endpoint_url}' \n"
-        if amazon_s3.enable_virtual_host_style:
-            connection_params_str += f"  ENABLE_VIRTUAL_HOST_STYLE = '{amazon_s3.enable_virtual_host_style}'\n"
-        if amazon_s3.master_key:
-            connection_params_str += f"  MASTER_KEY = '{amazon_s3.master_key}'\n"
-        if amazon_s3.region:
-            connection_params_str += f"  REGION = '{amazon_s3.region}'\n"
-        if amazon_s3.security_token:
-            connection_params_str += (
-                f"  SECURITY_TOKEN = '{amazon_s3.security_token}'\n"
-            )
+    def _copy_string(self, value):
+        literal = string_literal(value)
+        return literal.replace("%", "%%") if self.preparer._double_percents else literal
 
-        return (
-            f"'{amazon_s3.uri}' \n"
-            f"CONNECTION = (\n"
-            f"{connection_params_str}\n"
-            f")"
+    def _copy_option(self, value, **kw):
+        if hasattr(value, "_compiler_dispatch"):
+            return value._compiler_dispatch(self, **kw)
+        token = option_value(value)
+        return token.replace("%", "%%") if self.preparer._double_percents else token
+
+    def visit_amazon_s3(self, amazon_s3: AmazonS3, **kw):
+        connection_params_str = f"  ACCESS_KEY_ID = {self._copy_string(amazon_s3.access_key_id)} \n"
+        connection_params_str += f"  SECRET_ACCESS_KEY = {self._copy_string(amazon_s3.secret_access_key)}\n"
+        optional = (
+            ("endpoint_url", "ENDPOINT_URL"),
+            ("enable_virtual_host_style", "ENABLE_VIRTUAL_HOST_STYLE"),
+            ("master_key", "MASTER_KEY"),
+            ("region", "REGION"),
+            ("security_token", "SECURITY_TOKEN"),
         )
+        for attribute, key in optional:
+            value = getattr(amazon_s3, attribute, None)
+            if value:
+                connection_params_str += f"  {key} = {self._copy_string(str(value))} \n"
+        return f"{self._copy_string(amazon_s3.uri)} \nCONNECTION = (\n{connection_params_str}\n)"
 
     def visit_azure_blob_storage(self, azure: AzureBlobStorage, **kw):
         return (
-            f"'{azure.uri}' \n"
+            f"{self._copy_string(azure.uri)} \n"
             f"CONNECTION = (\n"
-            f"  ENDPOINT_URL = 'https://{azure.account_name}.blob.core.windows.net' \n"
-            f"  ACCOUNT_NAME = '{azure.account_name}' \n"
-            f"  ACCOUNT_KEY = '{azure.account_key}'\n"
+            f"  ENDPOINT_URL = {self._copy_string('https://' + azure.account_name + '.blob.core.windows.net')} \n"
+            f"  ACCOUNT_NAME = {self._copy_string(azure.account_name)} \n"
+            f"  ACCOUNT_KEY = {self._copy_string(azure.account_key)}\n"
             f")"
         )
 
     def visit_google_cloud_storage(self, gcs: GoogleCloudStorage, **kw):
         return (
-            f"'{gcs.uri}' \n"
+            f"{self._copy_string(gcs.uri)} \n"
             f"CONNECTION = (\n"
             f"  ENDPOINT_URL = 'https://storage.googleapis.com' \n"
-            f"  CREDENTIAL = '{gcs.credentials}' \n"
+            f"  CREDENTIAL = {self._copy_string(gcs.credentials)} \n"
             f")"
         )
 
     def visit_stage(self, stage, **kw):
-        if stage.path:
-            return f"@{stage.name}/{stage.path}"
-        return f"@{stage.name}"
+        location = f"@{stage.name}/{stage.path}" if stage.path else f"@{stage.name}"
+        # Databend file_location accepts a string literal beginning with '@'. Keep the existing
+        # compact spelling for simple locations and quote locations containing token delimiters.
+        if re.fullmatch(r"@[^\s,`;\"'()\\]+", location):
+            return location.replace("%", "%%") if self.preparer._double_percents else location
+        return self._copy_string(location)
 
 
 class TiDBCloudLakeExecutionContext(default.DefaultExecutionContext):
@@ -1396,6 +1394,10 @@ class TiDBCloudLakeDDLCompiler(compiler.DDLCompiler):
 
 
 class TiDBCloudLakeDialect(default.DefaultDialect):
+    @classmethod
+    def engine_created(cls, engine):
+        install_engine_diagnostics(engine)
+
     name = "lake"
     driver = "lake"
     supports_cast = True

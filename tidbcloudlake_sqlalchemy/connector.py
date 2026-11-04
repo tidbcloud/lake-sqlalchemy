@@ -10,6 +10,7 @@ from datetime import datetime, date, time, timedelta
 from tidbcloudlake_sqlalchemy.errors import Error, NotSupportedError
 
 from tidbcloudlake_driver import BlockingLakeClient
+from .diagnostics import Diagnostics
 
 # PEP 249 module globals
 apilevel = "2.0"
@@ -107,7 +108,11 @@ class Connection:
     """
 
     def __init__(self, dsn="lake://root:@localhost:8000/?sslmode=disable"):
-        self.client = BlockingLakeClient(dsn)
+        self._diagnostics = Diagnostics(dsn)
+        try:
+            self.client = BlockingLakeClient(dsn)
+        except Exception as e:
+            raise Error(self._diagnostics.safe_error(e)) from None
 
     def close(self):
         pass
@@ -116,7 +121,10 @@ class Connection:
         pass
 
     def cursor(self):
-        return Cursor(self.client.cursor())
+        try:
+            return Cursor(self.client.cursor(), self._diagnostics)
+        except Exception as e:
+            raise Error(self._diagnostics.safe_error(e)) from None
 
     def rollback(self):
         raise NotSupportedError("Transactions are not supported")  # pragma: no cover
@@ -130,8 +138,9 @@ class Cursor:
     visible by other cursors or connections.
     """
 
-    def __init__(self, conn):
+    def __init__(self, conn, diagnostics=None):
         self.inner = conn
+        self._diagnostics = diagnostics.for_cursor() if diagnostics else Diagnostics("")
 
     @property
     def rowcount(self):
@@ -158,13 +167,13 @@ class Cursor:
         try:
             return self.inner.description
         except Exception as e:
-            raise Error(str(e)) from e
+            raise Error(self._diagnostics.safe_error(e)) from None
 
     def close(self):
         try:
             self.inner.close()
         except Exception as e:
-            raise Error(str(e)) from e
+            raise Error(self._diagnostics.safe_error(e)) from None
 
     def mogrify(self, query, parameters):
         if parameters:
@@ -182,9 +191,10 @@ class Cursor:
         try:
             query = self.mogrify(operation, parameters)
             query = query.replace("%%", "%")
+            self._diagnostics.remember_statement(query)
             return self.inner.execute(query)
         except Exception as e:
-            raise Error(str(e)) from e
+            raise Error(self._diagnostics.safe_error(e)) from None
 
     def executemany(self, operation, seq_of_parameters):
         """Prepare a database operation (query or command) and then execute it against all parameter
@@ -211,10 +221,11 @@ class Cursor:
                 for parameters in seq_of_parameters:
                     values_list.append(q_values % _escaper.escape_args(parameters))
                 query = "{} {};".format(q_prefix, ",".join(values_list))
+                self._diagnostics.remember_statement(query)
                 return self.inner.execute(query)
             except Exception as e:
                 # We have to raise dbAPI error
-                raise Error(str(e)) from e
+                raise Error(self._diagnostics.safe_error(e)) from None
         else:
             for parameters in seq_of_parameters:
                 self.execute(operation, parameters)
@@ -228,7 +239,7 @@ class Cursor:
                 return None
             return row.values()
         except Exception as e:
-            raise Error(str(e)) from e
+            raise Error(self._diagnostics.safe_error(e)) from None
 
     def fetchmany(self, size=None):
         """Fetch the next set of rows of a query result, returning a sequence of sequences (e.g. a
@@ -243,7 +254,7 @@ class Cursor:
             rows = self.inner.fetchmany(size)
             return [row.values() for row in rows]
         except Exception as e:
-            raise Error(str(e)) from e
+            raise Error(self._diagnostics.safe_error(e)) from None
 
     def fetchall(self):
         """Fetch all (remaining) rows of a query result, returning them as a sequence of sequences
@@ -253,7 +264,7 @@ class Cursor:
             rows = self.inner.fetchall()
             return [row.values() for row in rows]
         except Exception as e:
-            raise Error(str(e)) from e
+            raise Error(self._diagnostics.safe_error(e)) from None
 
     def __next__(self):
         """Return the next row from the currently executing SQL statement using the same semantics
@@ -265,7 +276,7 @@ class Cursor:
         except StopIteration as e:
             raise e
         except Exception as e:
-            raise Error(str(e)) from e
+            raise Error(self._diagnostics.safe_error(e)) from None
 
     next = __next__
 
