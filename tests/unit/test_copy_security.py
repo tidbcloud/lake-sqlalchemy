@@ -103,6 +103,19 @@ def test_required_s3_fields_compile_without_optional_attributes():
     assert "ENDPOINT_URL" not in sql
 
 
+def test_s3_partial_options_preserve_false_and_initialize_unset_fields():
+    storage = AmazonS3(uri="s3://bucket/", access_key_id="id", secret_access_key="secret",
+                       endpoint_url="https://s3.example.com", enable_virtual_host_style=False,
+                       region="us-west-2")
+    assert storage.enable_virtual_host_style is False
+    assert storage.master_key is None
+    assert storage.security_token is None
+    sql = compile_sql(CopyIntoTable(target=table("t"), from_=storage))
+    assert "ENDPOINT_URL = 'https://s3.example.com'" in sql
+    assert "REGION = 'us-west-2'" in sql
+    assert "ENABLE_VIRTUAL_HOST_STYLE" not in sql
+
+
 @pytest.mark.parametrize(
     "name,path,expected",
     [
