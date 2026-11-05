@@ -7,6 +7,19 @@ from sqlalchemy.testing import exclusions
 class Requirements(SuiteRequirements):
 
     @property
+    def check_constraint_reflection(self):
+        return exclusions.closed()  # Lake cannot create or reflect CHECK constraints.
+
+    @property
+    def inline_check_constraint_reflection(self):
+        return exclusions.closed()
+
+    @property
+    def constraint_comment_reflection(self):
+        return exclusions.closed()
+
+
+    @property
     def foreign_keys(self):
         """Target database must support foreign keys."""
 

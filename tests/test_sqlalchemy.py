@@ -3,6 +3,7 @@
 from sqlalchemy.testing.suite import *
 
 from sqlalchemy.testing.suite import ComponentReflectionTestExtra as _ComponentReflectionTestExtra
+from sqlalchemy.testing.suite import ComponentReflectionTest as _ComponentReflectionTest
 from sqlalchemy.testing.suite import DeprecatedCompoundSelectTest as _DeprecatedCompoundSelectTest
 from sqlalchemy.testing.suite import BooleanTest as _BooleanTest
 from sqlalchemy.testing.suite import BinaryTest as _BinaryTest
@@ -34,16 +35,29 @@ if version.parse(sqlalchemy.__version__) >= version.parse('2.0.0'):
     if version.parse(sqlalchemy.__version__) < version.parse('2.0.42'):
         from sqlalchemy.testing.suite import BizarroCharacterFKResolutionTest as _BizarroCharacterFKResolutionTest
     from sqlalchemy.testing.suite import EnumTest as _EnumTest
-else:
-    from sqlalchemy.testing.suite import ComponentReflectionTest as _ComponentReflectionTest
+class _LakeReflectionFixtures:
+    @classmethod
+    def define_tables(cls, metadata):
+        super().define_tables(metadata)
+        # Upstream reflection fixtures unconditionally declare unsupported keys,
+        # checks and indexes. Keep testing supported reflection with real tables;
+        # rejection of unsupported DDL is covered independently by security tests.
+        for table in metadata.tables.values():
+            for constraint in list(table.constraints):
+                if isinstance(constraint, (sqlalchemy.CheckConstraint, sqlalchemy.UniqueConstraint,
+                                           sqlalchemy.ForeignKeyConstraint)):
+                    table.constraints.remove(constraint)
+            for column in table.columns:
+                column.foreign_keys.clear()
+            table.foreign_keys.clear()
+            table.indexes.clear()
 
-    class ComponentReflectionTest(_ComponentReflectionTest):
 
-        @testing.skip("lake")
-        def test_get_indexes(self):
-            pass
+class ComponentReflectionTest(_LakeReflectionFixtures, _ComponentReflectionTest):
+    pass
 
-class ComponentReflectionTestExtra(_ComponentReflectionTestExtra):
+
+class ComponentReflectionTestExtra(_LakeReflectionFixtures, _ComponentReflectionTestExtra):
     @testing.skip("lake") #ToDo  No length in TiDB Cloud Lake
     @testing.requires.table_reflection
     def test_varchar_reflection(self, connection, metadata):
