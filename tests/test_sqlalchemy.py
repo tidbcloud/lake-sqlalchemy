@@ -216,7 +216,7 @@ class LongNameBlowoutTest(_LongNameBlowoutTest):
     __requires__ = ("index_reflection",)  # This will do to make it skip for now
 
 
-class QuotedNameArgumentTest(_QuotedNameArgumentTest):
+class QuotedNameArgumentTest(_LakeReflectionFixtures, _QuotedNameArgumentTest):
     def quote_fixtures(fn):
         return testing.combinations(
             ("quote ' one",),
