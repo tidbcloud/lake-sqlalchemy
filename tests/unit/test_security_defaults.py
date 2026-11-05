@@ -43,3 +43,14 @@ def test_orm_primary_key_metadata_warns_that_it_is_not_enforced(caplog):
     with caplog.at_level('WARNING'):
         assert 'PRIMARY KEY' not in str(CreateTable(table).compile(dialect=TiDBCloudLakeDialect()))
     assert 'does not enforce PRIMARY KEY' in caplog.text
+
+
+@pytest.mark.parametrize("kind", ["check", "foreign"])
+def test_explicit_check_and_foreign_keys_fail_before_execution(kind):
+    from sqlalchemy import CheckConstraint, ForeignKeyConstraint
+    metadata = MetaData()
+    Table("parent", metadata, Column("id", Integer, primary_key=True))
+    constraint = CheckConstraint("id > 0") if kind == "check" else ForeignKeyConstraint(["id"], ["parent.id"])
+    table = Table("child", metadata, Column("id", Integer), constraint)
+    with pytest.raises(CompileError, match="does not enforce"):
+        CreateTable(table).compile(dialect=TiDBCloudLakeDialect())

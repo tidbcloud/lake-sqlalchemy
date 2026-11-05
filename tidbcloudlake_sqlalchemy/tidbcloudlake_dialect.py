@@ -1308,9 +1308,10 @@ class TiDBCloudLakeDDLCompiler(compiler.DDLCompiler):
         self, table, _include_foreign_key_constraints=None, **kw
     ):
         for constraint in table.constraints:
-            if constraint._create_rule is not None and not constraint._create_rule(self):
-                continue
-            if hasattr(constraint, "_should_create_for_compiler") and not constraint._should_create_for_compiler(self):
+            if hasattr(constraint, "_should_create_for_compiler"):
+                if not constraint._should_create_for_compiler(self):
+                    continue
+            elif constraint._create_rule is not None and not constraint._create_rule(self):
                 continue
             if not list(constraint.columns) and getattr(constraint, "sqltext", None) is None:
                 continue
