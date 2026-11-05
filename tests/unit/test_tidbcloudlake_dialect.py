@@ -36,17 +36,17 @@ class TestTiDBCloudLakeDialect:
         u = url.make_url("lake://user:pass@host:443/db?warehouse=test")
         args, kwargs = dialect.create_connect_args(u)
         assert args == []
-        assert kwargs["dsn"] == "lake://user:pass@host:443/db?warehouse=test"
+        assert kwargs["dsn"] == "lake://user:pass@host:443/db?warehouse=test&sslmode=require"
 
         u = url.make_url("lake://user:pass@host:443/db")
         args, kwargs = dialect.create_connect_args(u)
         assert args == []
-        assert kwargs["dsn"] == "lake://user:pass@host:443/db"
+        assert kwargs["dsn"] == "lake://user:pass@host:443/db?sslmode=require"
 
         u = url.make_url("lake://user:pass@host:443/db?warehouse=test&secure=True")
         args, kwargs = dialect.create_connect_args(u)
         assert args == []
-        assert url.make_url(kwargs["dsn"]) == u
+        assert url.make_url(kwargs["dsn"]) == u.update_query_dict({"sslmode": "require"})
 
     def test_do_execute(
             self, dialect: TiDBCloudLakeDialect, cursor: mock.Mock(spec=MockCursor)

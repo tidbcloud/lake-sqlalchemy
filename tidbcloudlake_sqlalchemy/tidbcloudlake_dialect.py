@@ -36,6 +36,8 @@ import sqlalchemy.engine.reflection
 import sqlalchemy.types as sqltypes
 from typing import Any, Dict, Optional, Union, List
 from sqlalchemy import util as sa_util
+from sqlalchemy.exc import CompileError
+from .connector import secure_dsn
 from sqlalchemy.engine import reflection
 from sqlalchemy.sql import (
     compiler,
@@ -946,7 +948,7 @@ class TiDBCloudLakeCompiler(PGCompiler):
         return text
 
     def for_update_clause(self, select, **kw):
-        return ""  # Not supported
+        raise CompileError("Lake does not support SELECT FOR UPDATE; no row lock was acquired")
 
     def visit_like_op_binary(self, binary, operator, **kw):
         # escape = binary.modifiers.get("escape", None)
@@ -1295,23 +1297,31 @@ class TiDBCloudLakeTypeCompiler(compiler.GenericTypeCompiler):
 
 class TiDBCloudLakeDDLCompiler(compiler.DDLCompiler):
     def visit_primary_key_constraint(self, constraint, **kw):
+        sa_util.warn("Lake does not enforce PRIMARY KEY; ORM identity metadata is client-side only")
         return ""
 
     def visit_foreign_key_constraint(self, constraint, **kw):
-        return ""
+        raise CompileError("Lake does not enforce ForeignKeyConstraint")
 
     def create_table_constraints(
         self, table, _include_foreign_key_constraints=None, **kw
     ):
+        for constraint in table.constraints:
+            if not list(constraint.columns) and getattr(constraint, "sqltext", None) is None:
+                continue
+            if isinstance(constraint, sqlalchemy.schema.PrimaryKeyConstraint):
+                sa_util.warn("Lake does not enforce PRIMARY KEY; ORM identity metadata is client-side only")
+            else:
+                raise CompileError("Lake does not enforce %s" % type(constraint).__name__)
         return ""
 
     def visit_create_index(
         self, create, include_schema=False, include_table_schema=True, **kw
     ):
-        return ""
+        raise CompileError("Lake does not support CREATE INDEX")
 
     def visit_drop_index(self, drop, **kw):
-        return ""
+        raise CompileError("Lake does not support DROP INDEX")
 
     def visit_drop_schema(self, drop, **kw):
         # Override - TiDB Cloud Lake does not support the CASCADE option
@@ -1472,7 +1482,7 @@ class TiDBCloudLakeDialect(default.DefaultDialect):
     def create_connect_args(self, url):
         return (
             [],
-            {"dsn": url.set(drivername="lake").render_as_string(hide_password=False)},
+            {"dsn": secure_dsn(url.set(drivername="lake").render_as_string(hide_password=False))},
         )
 
     def create_server_side_cursor(self):

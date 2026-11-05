@@ -244,3 +244,13 @@ DBAPI error messages and SQLAlchemy engine diagnostics redact credential
 assignments and credential-bearing URLs. Actual DSNs and SQL sent to the
 driver retain their values. These protections cover this dialect's diagnostic
 paths; applications remain responsible for their own logs and tracing.
+
+Security defaults
+-----------------
+Connections require an explicit DSN. TLS certificate and hostname verification
+are enabled by default (``sslmode=require``). Plain HTTP requires an explicit
+``sslmode=disable`` development opt-out; never use it for remote credentials.
+Lake does not enforce relational constraints. ORM primary-key identity metadata
+emits a warning; foreign-key, unique/check constraints and index DDL fail rather
+than pretending to install protection. ``SELECT FOR UPDATE`` raises a compilation
+error because Lake cannot provide the requested row lock.

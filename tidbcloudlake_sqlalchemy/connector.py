@@ -11,6 +11,27 @@ from tidbcloudlake_sqlalchemy.errors import Error, NotSupportedError
 
 from tidbcloudlake_driver import BlockingLakeClient
 from .diagnostics import Diagnostics
+from urllib.parse import urlsplit, parse_qsl, urlencode, urlunsplit
+
+
+def secure_dsn(dsn):
+    if not isinstance(dsn, str) or not dsn.strip():
+        raise Error("An explicit Lake DSN is required")
+    try:
+        parts = urlsplit(dsn)
+        if not parts.hostname or parts.scheme not in ("lake", "https", "http"):
+            raise ValueError
+        query = parse_qsl(parts.query, keep_blank_values=True)
+        modes = [value for key, value in query if key.lower() == "sslmode"]
+        if len(modes) > 1 or (modes and modes[0] not in ("require", "disable")):
+            raise ValueError
+        if not modes:
+            query.append(("sslmode", "require"))
+        if parts.scheme == "http" and (not modes or modes[0] != "disable"):
+            raise Error("HTTP requires an explicit sslmode=disable opt-out")
+        return urlunsplit(parts._replace(query=urlencode(query)))
+    except ValueError:
+        raise Error("Invalid Lake DSN or sslmode; use require or explicitly disable") from None
 
 # PEP 249 module globals
 apilevel = "2.0"
@@ -107,7 +128,8 @@ class Connection:
     These objects are small stateless factories for cursors, which do all the real work.
     """
 
-    def __init__(self, dsn="lake://root:@localhost:8000/?sslmode=disable"):
+    def __init__(self, dsn=None):
+        dsn = secure_dsn(dsn)
         self._diagnostics = Diagnostics(dsn)
         try:
             self.client = BlockingLakeClient(dsn)
