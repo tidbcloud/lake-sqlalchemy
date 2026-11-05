@@ -63,7 +63,7 @@ class ParamEscaper:
         if isinstance(item, bytes):
             item = item.decode("utf-8")
         return "'{}'".format(
-            item.replace("\\", "\\\\").replace("'", "\\'").replace("%", "%%")
+            item.replace("\\", "\\\\").replace("'", "\\'")
         )
 
     def escape_item(self, item):
@@ -199,8 +199,10 @@ class Cursor:
 
     def mogrify(self, query, parameters):
         if parameters:
-            query = query % _escaper.escape_args(parameters)
-        return query
+            return query % _escaper.escape_args(parameters)
+        # SQLAlchemy escapes literal percent signs in compiled SQL, including
+        # statements with no bind parameters. Bound data is never re-formatted.
+        return query.replace("%%", "%")
 
     def execute(self, operation, parameters=None):
         """Prepare and execute a database operation (query or command)."""
@@ -212,7 +214,6 @@ class Cursor:
 
         try:
             query = self.mogrify(operation, parameters)
-            query = query.replace("%%", "%")
             self._diagnostics.remember_statement(query)
             return self.inner.execute(query)
         except Exception as e:
@@ -237,7 +238,7 @@ class Cursor:
         m = RE_INSERT_VALUES.match(operation)
         if m:
             try:
-                q_prefix = m.group(1)
+                q_prefix = m.group(1).replace("%%", "%")
                 q_values = m.group(2).rstrip()
 
                 for parameters in seq_of_parameters:
