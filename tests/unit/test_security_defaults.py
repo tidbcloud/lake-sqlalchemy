@@ -4,7 +4,7 @@ from sqlalchemy import Column, Integer, MetaData, Table, UniqueConstraint, selec
 from sqlalchemy.schema import CreateTable, CreateIndex, Index
 from sqlalchemy.exc import CompileError
 from tidbcloudlake_sqlalchemy import connector
-from tidbcloudlake_sqlalchemy.tidbcloudlake_dialect import TiDBCloudLakeDialect, LakeConstraintWarning
+from tidbcloudlake_sqlalchemy.tidbcloudlake_dialect import TiDBCloudLakeDialect
 
 
 def test_requires_explicit_endpoint_and_defaults_to_tls(monkeypatch):
@@ -38,7 +38,8 @@ def test_unsupported_enforcement_fails_before_ddl():
         CreateIndex(Index('i', table.c.id)).compile(dialect=TiDBCloudLakeDialect())
 
 
-def test_orm_primary_key_metadata_warns_that_it_is_not_enforced():
+def test_orm_primary_key_metadata_warns_that_it_is_not_enforced(caplog):
     table = Table('t', MetaData(), Column('id', Integer, primary_key=True))
-    with pytest.warns(LakeConstraintWarning, match='does not enforce PRIMARY KEY'):
+    with caplog.at_level('WARNING'):
         assert 'PRIMARY KEY' not in str(CreateTable(table).compile(dialect=TiDBCloudLakeDialect()))
+    assert 'does not enforce PRIMARY KEY' in caplog.text
