@@ -23,6 +23,7 @@ dialect in conjunction with the :class:`_schema.Table` construct:
     Table("some_table", metadata, ..., lake_transient=True|False)
 
 """
+import warnings
 import decimal
 import re
 import operator
@@ -1295,9 +1296,13 @@ class TiDBCloudLakeTypeCompiler(compiler.GenericTypeCompiler):
         return "GEOGRAPHY"
 
 
+class LakeConstraintWarning(UserWarning):
+    """Lake retains ORM identity metadata but does not enforce relational keys."""
+
+
 class TiDBCloudLakeDDLCompiler(compiler.DDLCompiler):
     def visit_primary_key_constraint(self, constraint, **kw):
-        sa_util.warn("Lake does not enforce PRIMARY KEY; ORM identity metadata is client-side only")
+        warnings.warn("Lake does not enforce PRIMARY KEY; ORM identity metadata is client-side only", LakeConstraintWarning, stacklevel=2)
         return ""
 
     def visit_foreign_key_constraint(self, constraint, **kw):
@@ -1310,7 +1315,7 @@ class TiDBCloudLakeDDLCompiler(compiler.DDLCompiler):
             if not list(constraint.columns) and getattr(constraint, "sqltext", None) is None:
                 continue
             if isinstance(constraint, sqlalchemy.schema.PrimaryKeyConstraint):
-                sa_util.warn("Lake does not enforce PRIMARY KEY; ORM identity metadata is client-side only")
+                warnings.warn("Lake does not enforce PRIMARY KEY; ORM identity metadata is client-side only", LakeConstraintWarning, stacklevel=2)
             else:
                 raise CompileError("Lake does not enforce %s" % type(constraint).__name__)
         return ""

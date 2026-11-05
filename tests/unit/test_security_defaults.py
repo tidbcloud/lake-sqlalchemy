@@ -2,9 +2,9 @@ import pytest
 from unittest.mock import Mock
 from sqlalchemy import Column, Integer, MetaData, Table, UniqueConstraint, select
 from sqlalchemy.schema import CreateTable, CreateIndex, Index
-from sqlalchemy.exc import CompileError, SAWarning
+from sqlalchemy.exc import CompileError
 from tidbcloudlake_sqlalchemy import connector
-from tidbcloudlake_sqlalchemy.tidbcloudlake_dialect import TiDBCloudLakeDialect
+from tidbcloudlake_sqlalchemy.tidbcloudlake_dialect import TiDBCloudLakeDialect, LakeConstraintWarning
 
 
 def test_requires_explicit_endpoint_and_defaults_to_tls(monkeypatch):
@@ -40,5 +40,5 @@ def test_unsupported_enforcement_fails_before_ddl():
 
 def test_orm_primary_key_metadata_warns_that_it_is_not_enforced():
     table = Table('t', MetaData(), Column('id', Integer, primary_key=True))
-    with pytest.warns(SAWarning, match='does not enforce PRIMARY KEY'):
+    with pytest.warns(LakeConstraintWarning, match='does not enforce PRIMARY KEY'):
         assert 'PRIMARY KEY' not in str(CreateTable(table).compile(dialect=TiDBCloudLakeDialect()))
