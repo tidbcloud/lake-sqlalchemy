@@ -254,3 +254,13 @@ Lake does not enforce relational constraints. ORM primary-key identity metadata
 emits a warning; foreign-key, unique/check constraints and index DDL fail rather
 than pretending to install protection. ``SELECT FOR UPDATE`` raises a compilation
 error because Lake cannot provide the requested row lock.
+
+
+Generated DDL boundaries
+------------------------
+MERGE INSERT columns use the same identifier quoting as MERGE UPDATE. A
+`lake_engine` is a single engine name. String `lake_cluster_by` values retain
+expression-list syntax (including CAST and quoted literals), but cannot close the
+list, append a statement/comment or introduce a subquery. Prefer SQLAlchemy
+expression objects for programmatic construction. Reflected options pass through
+the same validation when emitted as CREATE TABLE.
