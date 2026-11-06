@@ -31,6 +31,7 @@ import datetime
 from types import NoneType
 
 from .sql_literals import string_literal, option_name, option_value
+from .ddl_options import engine_name, cluster_expression
 from .diagnostics import install_engine_diagnostics
 
 import sqlalchemy.engine.reflection
@@ -1055,7 +1056,7 @@ class TiDBCloudLakeCompiler(PGCompiler):
             )
         return "{} ({}) VALUES ({})".format(
             insert_str,
-            ", ".join(set_cols),
+            ", ".join(self.preparer.quote_identifier(col) for col in set_cols),
             ", ".join(map(lambda e: e._compiler_dispatch(self, **kw), sets_vals)),
         )
 
@@ -1348,7 +1349,7 @@ class TiDBCloudLakeDDLCompiler(compiler.DDLCompiler):
 
         engine = db_opts.get("engine")
         if engine is not None:
-            table_opts.append(f" ENGINE={engine}")
+            table_opts.append(f" ENGINE={engine_name(engine)}")
 
         if table.comment is not None:
             comment = self.sql_compiler.render_literal_value(
@@ -1359,7 +1360,7 @@ class TiDBCloudLakeDDLCompiler(compiler.DDLCompiler):
         cluster_keys = db_opts.get("cluster_by")
         if cluster_keys is not None:
             if isinstance(cluster_keys, str):
-                cluster_by = cluster_keys
+                cluster_by = cluster_expression(cluster_keys)
             elif isinstance(cluster_keys, list):
                 cluster_by = ", ".join(
                     self.sql_compiler.process(
