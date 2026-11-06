@@ -33,7 +33,7 @@ def test_ddl_options_cannot_escape_expression_boundary(option, value):
         str(CreateTable(t).compile(dialect=TiDBCloudLakeDialect()))
 
 
-@pytest.mark.parametrize('value', ['id', 'CAST(id AS VARCHAR), "Name"', "coalesce(id, 0)", "CASE WHEN id > 1 THEN id ELSE 0 END", "length('a; b')"])
+@pytest.mark.parametrize('value', ['id', 'engine', 'comment', 'CAST(id AS VARCHAR), "Name"', "coalesce(id, 0)", "CASE WHEN id > 1 THEN id ELSE 0 END", "length('a; b')"])
 def test_existing_cluster_expressions_remain_supported(value):
     t = Table('t', MetaData(), Column('id', Integer), lake_cluster_by=value)
     sql = str(CreateTable(t).compile(dialect=TiDBCloudLakeDialect()))
