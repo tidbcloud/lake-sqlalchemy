@@ -22,9 +22,18 @@ def cluster_expression(value):
             quote = char
             index += 1
             while index < len(value):
-                if value[index] == '\\' and quote != '`':
-                    index += 2
-                elif value[index] == quote:
+                if value[index] == '\\':
+                    if quote == "'":
+                        index += 2
+                        continue
+                    escape_start = index
+                    while index < len(value) and value[index] == '\\':
+                        index += 1
+                    # Identifier quote handling can differ across SQL dialects.
+                    if index < len(value) and value[index] == quote and (index - escape_start) % 2:
+                        raise CompileError('Ambiguous escape before a cluster expression identifier quote')
+                    continue
+                if value[index] == quote:
                     index += 1
                     if index < len(value) and value[index] == quote:
                         index += 1

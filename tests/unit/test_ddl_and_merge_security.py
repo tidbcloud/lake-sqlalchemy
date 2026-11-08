@@ -22,6 +22,7 @@ def test_merge_names_use_the_identifier_preparer():
     ('engine', 'FUSE; DROP TABLE sentinel'),
     ('engine', 'FUSE COMMENT=123'),
     ('cluster_by', 'id) AS SELECT 1; DROP TABLE sentinel; --'),
+    ('cluster_by', r'"a\" ) ; DROP TABLE sentinel ; --"'),
     ('cluster_by', 'id, (SELECT id FROM secret)'),
     ('cluster_by', 'id /* comment */'),
     ('cluster_by', 'id) ENGINE=Memory ('),
@@ -37,4 +38,11 @@ def test_ddl_options_cannot_escape_expression_boundary(option, value):
 def test_existing_cluster_expressions_remain_supported(value):
     t = Table('t', MetaData(), Column('id', Integer), lake_cluster_by=value)
     sql = str(CreateTable(t).compile(dialect=TiDBCloudLakeDialect()))
+    assert 'CLUSTER BY ( ' + value + ' )' in sql
+
+
+def test_cluster_expression_handles_identifier_backslashes_and_string_escapes():
+    value = r'''length('it\'s; fine'), "a""name", "inner\name"'''
+    table = Table('t', MetaData(), Column('id', Integer), lake_cluster_by=value)
+    sql = str(CreateTable(table).compile(dialect=TiDBCloudLakeDialect()))
     assert 'CLUSTER BY ( ' + value + ' )' in sql
