@@ -17,6 +17,7 @@ from tidbcloudlake_sqlalchemy.dml import (
     CopyIntoTableOptions,
     CopyIntoLocation,
     CopyFormat,
+    FileColumnClause,
     CSVFormat,
     StageClause,
 )
@@ -258,3 +259,42 @@ def test_dsn_password_with_whitespace_is_redacted_before_url_parsing():
     diagnostics = Diagnostics("lake://user:synthetic pass@host")
     assert "synthetic" not in diagnostics.safe_error("lake://user:synthetic pass@host")
     assert "pass@host" not in diagnostics.safe_error("lake://user:synthetic pass@host")
+
+
+@pytest.mark.parametrize("columns", ["$1 FROM other_table", "$1); DROP TABLE sentinel; --"])
+def test_copy_projection_cannot_escape_into_another_clause(columns):
+    statement = CopyIntoTable(
+        target=table("t"),
+        from_=FileColumnClause(columns=columns, from_=StageClause(name="src")),
+        file_format=CSVFormat(),
+    )
+    with pytest.raises(CompileError):
+        compile_sql(statement)
+
+
+def test_diagnostic_url_scan_handles_long_words_and_prefixed_urls():
+    from tidbcloudlake_sqlalchemy.diagnostics import redact
+
+    value = "a" * 100_000
+    assert redact(value) == value
+    assert "dummy-secret" not in redact("123lake://user:dummy-secret@warehouse.example/db")
+
+
+def test_copy_option_clause_cannot_append_another_option():
+    statement = CopyIntoTable(
+        target=table("t"),
+        from_=StageClause(name="src"),
+        file_format=CSVFormat(),
+        options=CopyIntoTableOptions(on_error=text("'CONTINUE' FORCE=TRUE")),
+    )
+    with pytest.raises(CompileError):
+        compile_sql(statement)
+
+
+def test_copy_projections_keep_columns_and_aliases():
+    statement = CopyIntoTable(
+        target=table("t"),
+        from_=FileColumnClause(columns="$1 AS id, upper($2)", from_=StageClause(name="src")),
+        file_format=CSVFormat(),
+    )
+    assert "SELECT $1 AS id, upper($2) FROM @src" in compile_sql(statement)

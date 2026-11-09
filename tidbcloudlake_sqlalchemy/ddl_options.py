@@ -12,8 +12,12 @@ def engine_name(value):
 
 
 def cluster_expression(value):
+    return expression_list(value, "lake_cluster_by")
+
+
+def expression_list(value, option, *, allow_aliases=False):
     if not isinstance(value, str) or not value.strip():
-        raise CompileError('lake_cluster_by must contain an expression')
+        raise CompileError(f'{option} must contain an expression')
     depth = 0
     index = 0
     while index < len(value):
@@ -31,7 +35,7 @@ def cluster_expression(value):
                         index += 1
                     # Identifier quote handling can differ across SQL dialects.
                     if index < len(value) and value[index] == quote and (index - escape_start) % 2:
-                        raise CompileError('Ambiguous escape before a cluster expression identifier quote')
+                        raise CompileError('Ambiguous escape before a SQL expression identifier quote')
                     continue
                 if value[index] == quote:
                     index += 1
@@ -42,26 +46,28 @@ def cluster_expression(value):
                 else:
                     index += 1
             else:
-                raise CompileError('Unterminated cluster expression quote')
+                raise CompileError('Unterminated SQL expression quote')
             continue
         if char == '(':
             depth += 1
         elif char == ')':
             depth -= 1
             if depth < 0:
-                raise CompileError('Unbalanced cluster expression')
+                raise CompileError('Unbalanced SQL expression')
         elif char == ';' or char == '#' or value.startswith(('--', '/*', '*/'), index):
-            raise CompileError('Statements and comments are not allowed in lake_cluster_by')
+            raise CompileError(f'Statements and comments are not allowed in {option}')
         elif char.isalpha() or char == '_':
             end = index + 1
             while end < len(value) and (value[end].isalnum() or value[end] in '_$'):
                 end += 1
             word = value[index:end].upper()
-            if word in _STATEMENTS or (word == 'AS' and depth == 0):
-                raise CompileError('SQL statements are not cluster expressions')
+            if word in _STATEMENTS and not (allow_aliases and depth and word == 'FROM'):
+                raise CompileError(f'SQL statements are not allowed in {option}')
+            if word == 'AS' and depth == 0 and not allow_aliases:
+                raise CompileError(f'Aliases are not allowed in {option}')
             index = end
             continue
         index += 1
     if depth:
-        raise CompileError('Unbalanced cluster expression')
+        raise CompileError('Unbalanced SQL expression')
     return value

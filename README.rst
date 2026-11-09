@@ -255,6 +255,10 @@ emits a warning; foreign-key, unique/check constraints and index DDL fail rather
 than pretending to install protection. ``SELECT FOR UPDATE`` raises a compilation
 error because Lake cannot provide the requested row lock.
 
+Remote plaintext DSNs require the process operator to set
+``TIDBCLOUDLAKE_ALLOW_INSECURE_REMOTE=1``. Local loopback DSNs can continue to
+use an explicit ``sslmode=disable`` for development.
+
 
 Generated DDL boundaries
 ------------------------

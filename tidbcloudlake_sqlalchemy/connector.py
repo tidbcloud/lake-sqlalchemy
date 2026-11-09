@@ -4,6 +4,8 @@
 #
 # Many docstrings in this file are based on the PEP, which is in the public domain.
 import decimal
+import os
+from ipaddress import ip_address
 import re
 import json
 from datetime import datetime, date, time, timedelta
@@ -25,8 +27,15 @@ def secure_dsn(dsn):
         modes = [value for key, value in query if key.lower() == "sslmode"]
         if len(modes) > 1 or (modes and modes[0] not in ("require", "disable")):
             raise ValueError
-        if not modes:
-            query.append(("sslmode", "require"))
+        query = [(key, value) for key, value in query if key.lower() != "sslmode"]
+        query.append(("sslmode", modes[0] if modes else "require"))
+        if modes == ["disable"]:
+            try:
+                loopback = ip_address(parts.hostname).is_loopback
+            except ValueError:
+                loopback = parts.hostname == "localhost"
+            if not loopback and os.environ.get("TIDBCLOUDLAKE_ALLOW_INSECURE_REMOTE") != "1":
+                raise Error("Remote plaintext Lake DSNs require TIDBCLOUDLAKE_ALLOW_INSECURE_REMOTE=1")
         if parts.scheme == "http" and (not modes or modes[0] != "disable"):
             raise Error("HTTP requires an explicit sslmode=disable opt-out")
         return urlunsplit(parts._replace(query=urlencode(query)))
