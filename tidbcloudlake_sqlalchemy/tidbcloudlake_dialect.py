@@ -31,10 +31,11 @@ import datetime
 from types import NoneType
 
 from .sql_literals import string_literal, option_name, option_value
-from .ddl_options import engine_name, cluster_expression
+from .ddl_options import engine_name, cluster_expression, expression_list
 from .diagnostics import install_engine_diagnostics
 
 import sqlalchemy.engine.reflection
+from sqlalchemy.sql.elements import BindParameter
 import sqlalchemy.types as sqltypes
 from typing import Any, Dict, Optional, Union, List
 from sqlalchemy import util as sa_util
@@ -1131,15 +1132,18 @@ class TiDBCloudLakeCompiler(PGCompiler):
                     for col in file_column_clause.columns
                 ]
             )
-        return f"SELECT {select_str}" f" FROM {source}"
+        columns = expression_list(select_str, "COPY file columns", allow_aliases=True)
+        return f"SELECT {columns} FROM {source}"
 
     def _copy_string(self, value):
         literal = string_literal(value)
         return literal.replace("%", "%%") if self.preparer._double_percents else literal
 
     def _copy_option(self, value, **kw):
-        if hasattr(value, "_compiler_dispatch"):
+        if isinstance(value, BindParameter):
             return value._compiler_dispatch(self, **kw)
+        if hasattr(value, "_compiler_dispatch"):
+            return option_value(value._compiler_dispatch(self, **kw))
         token = option_value(value)
         return token.replace("%", "%%") if self.preparer._double_percents else token
 

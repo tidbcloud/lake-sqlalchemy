@@ -14,7 +14,7 @@ _ASSIGNMENT = re.compile(
     r"(?P<value>" + _QUOTED + r"|[^\s,)&]+)",
     re.IGNORECASE,
 )
-_URL = re.compile(r"[A-Za-z][A-Za-z0-9+.-]*://[^\s'\"<>]+")
+_URL = re.compile(r"(?<![A-Za-z0-9+.-])[A-Za-z0-9+.-]+://[^\s'\"<>]+")
 _STRING = re.compile(_QUOTED)
 _SECRET_KEYS = {
     "password",
@@ -29,6 +29,8 @@ _SECRET_KEYS = {
 def _safe_url(match):
     try:
         parts = urlsplit(match.group())
+        if not parts.scheme or not parts.netloc:
+            return "<redacted-url>"
         return urlunsplit(
             (
                 parts.scheme,

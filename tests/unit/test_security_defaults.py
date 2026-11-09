@@ -54,3 +54,13 @@ def test_explicit_check_and_foreign_keys_fail_before_execution(kind):
     table = Table("child", metadata, Column("id", Integer), constraint)
     with pytest.raises(CompileError, match="does not enforce"):
         CreateTable(table).compile(dialect=TiDBCloudLakeDialect())
+
+
+@pytest.mark.parametrize("scheme", ["lake", "https", "http"])
+def test_remote_plaintext_requires_operator_opt_in(monkeypatch, scheme):
+    dsn = f"{scheme}://user:pass@warehouse.example/db?sslmode=disable"
+    monkeypatch.delenv("TIDBCLOUDLAKE_ALLOW_INSECURE_REMOTE", raising=False)
+    with pytest.raises(connector.Error, match="Remote plaintext"):
+        connector.secure_dsn(dsn)
+    monkeypatch.setenv("TIDBCLOUDLAKE_ALLOW_INSECURE_REMOTE", "1")
+    assert connector.secure_dsn(dsn) == dsn

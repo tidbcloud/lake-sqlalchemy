@@ -27,8 +27,7 @@ def option_name(value):
 
 def option_value(value):
     # Existing constructors use bare keywords/numbers and already quoted literal values.
-    # Retain these spellings, but reject strings that can append a new SQL clause. Explicit
-    # ClauseElement expressions are handled by the compiler before reaching this function.
+    # Retain these spellings, but reject strings that can append a new SQL clause.
     text = str(value)
     if not re.fullmatch(
         r"(?:[A-Za-z_][A-Za-z_0-9]*|[+-]?[0-9]+(?:\.[0-9]+)?|"
@@ -36,6 +35,6 @@ def option_value(value):
         text,
     ):
         raise CompileError(
-            "COPY options must be a keyword, number, quoted literal or explicit SQL expression"
+            "COPY options must be a keyword, number, quoted literal or bound value"
         )
     return text
