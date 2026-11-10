@@ -298,3 +298,29 @@ def test_copy_projections_keep_columns_and_aliases():
         file_format=CSVFormat(),
     )
     assert "SELECT $1 AS id, upper($2) FROM @src" in compile_sql(statement)
+
+
+@pytest.mark.parametrize("path", ["a/**/FORCE=TRUE", "a--x", "a*/x"])
+def test_copy_stage_comment_markers_are_quoted(path):
+    statement = CopyIntoTable(
+        target=table("t"),
+        from_=StageClause(name="src", path=path),
+        file_format=CSVFormat(),
+    )
+    assert f"FROM '@src/{path}'" in compile_sql(statement)
+
+
+def test_redaction_handles_long_unterminated_quotes():
+    sql = "PASSWORD='" + "''" * 100_000 + "dummy-secret"
+    assert redact(sql) == "PASSWORD='***'"
+    Diagnostics("").remember_statement(sql)
+
+
+def test_test_database_provisioning_rejects_sql_before_connecting():
+    from tidbcloudlake_sqlalchemy.provision import _lake_create_db, _lake_drop_db
+
+    engine = Mock()
+    for provision in (_lake_create_db, _lake_drop_db):
+        with pytest.raises(ValueError, match="Invalid Lake test database"):
+            provision("lake://", engine, "test; DROP DATABASE production")
+    engine.begin.assert_not_called()
