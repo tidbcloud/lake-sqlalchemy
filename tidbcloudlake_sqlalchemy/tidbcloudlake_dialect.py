@@ -1186,7 +1186,8 @@ class TiDBCloudLakeCompiler(PGCompiler):
         location = f"@{stage.name}/{stage.path}" if stage.path else f"@{stage.name}"
         # Databend file_location accepts a string literal beginning with '@'. Keep the existing
         # compact spelling for simple locations and quote locations containing token delimiters.
-        if re.fullmatch(r"@[^\s,`;\"'()\\]+", location):
+        has_comment_marker = any(marker in location for marker in ("--", "/*", "*/"))
+        if not has_comment_marker and re.fullmatch(r"@[^\s,`;\"'()\\]+", location):
             return location.replace("%", "%%") if self.preparer._double_percents else location
         return self._copy_string(location)
 

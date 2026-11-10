@@ -7,15 +7,14 @@ from urllib.parse import parse_qsl, unquote, urlsplit, urlunsplit
 from sqlalchemy import event
 
 
-_QUOTED = r"'(?:\\[\s\S]|''|[^'\\])*'|\"(?:\\[\s\S]|\"\"|[^\"\\])*\""
 _ASSIGNMENT = re.compile(
     r"\b(?:access_key_id|secret_access_key|master_key|security_token|account_key|"
-    r"credential|credentials|password|access_token|accesstoken|token)\s*=\s*"
-    r"(?P<value>" + _QUOTED + r"|[^\s,)&]+)",
+    r"credential|credentials|password|access_token|accesstoken|token)\s*=\s*",
     re.IGNORECASE,
 )
+_QUOTE = re.compile(r"['\"]")
+_UNQUOTED_VALUE = re.compile(r"[^\s,)&]+")
 _URL = re.compile(r"(?<![A-Za-z0-9+.-])[A-Za-z0-9+.-]+://[^\s'\"<>]+")
-_STRING = re.compile(_QUOTED)
 _SECRET_KEYS = {
     "password",
     "token",
@@ -44,23 +43,62 @@ def _safe_url(match):
         return "<redacted-url>"
 
 
+def _literal_end(text, start):
+    quote = text[start]
+    index = start + 1
+    while index < len(text):
+        if text[index] == "\\":
+            index += 2
+        elif text[index] == quote:
+            index += 1
+            if index == len(text) or text[index] != quote:
+                return index, True
+            index += 1
+        else:
+            index += 1
+    return len(text), False
+
+
+def _quoted_literals(text):
+    index = 0
+    while match := _QUOTE.search(text, index):
+        start = match.start()
+        index, closed = _literal_end(text, start)
+        yield start, index, closed
+
+
+def _assignment_values(text):
+    index = 0
+    while match := _ASSIGNMENT.search(text, index):
+        start = match.end()
+        if start < len(text) and text[start] in "'\"":
+            index, closed = _literal_end(text, start)
+            yield start, index, True, closed
+        else:
+            value = _UNQUOTED_VALUE.match(text, start)
+            index = value.end() if value else start
+            if value:
+                yield start, index, False, False
+
+
+def _replace_spans(text, spans, replacement):
+    parts = []
+    previous = 0
+    for start, end in spans:
+        parts.extend((text[previous:start], replacement))
+        previous = end
+    parts.append(text[previous:])
+    return "".join(parts)
+
+
 def redact(value):
     value = str(value)
-
-    # A URL inside a SQL literal can itself contain escaped quotes or whitespace. Match the
-    # complete literal before scanning ordinary URLs, so a signed query after such a character
-    # cannot fall outside the URL redaction.
-    def safe_literal(match):
-        literal = match.group()
-        if not _URL.search(literal):
-            return literal
-        return "'<redacted-url>'"
-
-    value = _STRING.sub(safe_literal, value)
-    value = _ASSIGNMENT.sub(
-        lambda m: m.group()[: m.start("value") - m.start()] + "'***'", value
-    )
-    return _URL.sub(_safe_url, value)
+    # Replace complete URL literals first, so whitespace or an escaped quote
+    # inside a signed URL cannot end the redaction early.
+    urls = ((start, end) for start, end, _ in _quoted_literals(value) if _URL.search(value, start, end))
+    value = _replace_spans(value, urls, "'<redacted-url>'")
+    assignments = ((start, end) for start, end, _, _ in _assignment_values(value))
+    return _URL.sub(_safe_url, _replace_spans(value, assignments, "'***'"))
 
 
 class Diagnostics:
@@ -88,23 +126,25 @@ class Diagnostics:
         # retain every credential ever used by a long-lived connection, or share mutable state
         # between independent cursors.
         self._secrets = set(self._connection_secrets)
-        for match in _ASSIGNMENT.finditer(sql):
-            value = match.group("value")
-            if len(value) >= 2 and value[0] in "'\"" and value[-1] == value[0]:
-                value = value[1:-1]
-                self._secrets.add(value)
-                self._secrets.add(
-                    re.sub(
-                        r"\\(.)",
-                        lambda m: {"n": "\n", "r": "\r", "t": "\t", "0": "\0"}.get(
-                            m[1], m[1]
-                        ),
-                        value,
-                    ).replace("''", "'")
-                )
-        for match in _STRING.finditer(sql):
-            value = match.group()[1:-1]
-            value = re.sub(r"\\(.)", r"\1", value).replace("''", "'")
+        for start, end, quoted, closed in _assignment_values(sql):
+            if not quoted:
+                continue
+            quote = sql[start]
+            value = sql[start + 1 : end - int(closed)]
+            self._secrets.add(value)
+            self._secrets.add(
+                re.sub(
+                    r"\\(.)",
+                    lambda m: {"n": "\n", "r": "\r", "t": "\t", "0": "\0"}.get(
+                        m[1], m[1]
+                    ),
+                    value,
+                ).replace(quote * 2, quote)
+            )
+        for start, end, closed in _quoted_literals(sql):
+            quote = sql[start]
+            value = sql[start + 1 : end - int(closed)]
+            value = re.sub(r"\\(.)", r"\1", value).replace(quote * 2, quote)
             if not _URL.match(value):
                 continue
             try:
