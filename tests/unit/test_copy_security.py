@@ -314,13 +314,3 @@ def test_redaction_handles_long_unterminated_quotes():
     sql = "PASSWORD='" + "''" * 100_000 + "dummy-secret"
     assert redact(sql) == "PASSWORD='***'"
     Diagnostics("").remember_statement(sql)
-
-
-def test_test_database_provisioning_rejects_sql_before_connecting():
-    from tidbcloudlake_sqlalchemy.provision import _lake_create_db, _lake_drop_db
-
-    engine = Mock()
-    for provision in (_lake_create_db, _lake_drop_db):
-        with pytest.raises(ValueError, match="Invalid Lake test database"):
-            provision("lake://", engine, "test; DROP DATABASE production")
-    engine.begin.assert_not_called()

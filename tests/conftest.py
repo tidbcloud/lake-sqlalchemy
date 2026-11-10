@@ -1,6 +1,8 @@
 from sqlalchemy.dialects import registry
 import pytest
 
+import lake_provision  # Register source-only SQLAlchemy test hooks.
+
 registry.register("lake", "tidbcloudlake_sqlalchemy.tidbcloudlake_dialect", "TiDBCloudLakeDialect")
 registry.register("lake.lake", "tidbcloudlake_sqlalchemy.tidbcloudlake_dialect", "TiDBCloudLakeDialect")
 
