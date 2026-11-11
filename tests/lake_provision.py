@@ -1,3 +1,6 @@
+"""Provision isolated follower databases for the repository test suite."""
+
+import logging
 import re
 
 from sqlalchemy.testing.provision import (
@@ -8,8 +11,11 @@ from sqlalchemy.testing.provision import (
 )
 
 
+logger = logging.getLogger(__name__)
+
+
 def _database_names(ident):
-    if not isinstance(ident, str) or not re.fullmatch(r"[A-Za-z_][A-Za-z0-9_]*", ident):
+    if not isinstance(ident, str) or not re.fullmatch(r"test_[0-9a-f]{12}", ident):
         raise ValueError("Invalid Lake test database identifier")
     return (ident, f"{ident}_test_schema", f"{ident}_test_schema_2")
 
@@ -18,13 +24,8 @@ def _database_names(ident):
 def _lake_create_db(cfg, eng, ident):
     names = _database_names(ident)
     with eng.begin() as conn:
-        try:
-            _lake_drop_db(cfg, conn, ident)
-        except Exception:
-            pass
-
-    with eng.begin() as conn:
         for name in names:
+            logger.info("Creating Lake test database %s", name)
             conn.exec_driver_sql(f"CREATE DATABASE IF NOT EXISTS `{name}`")
 
 
@@ -33,6 +34,7 @@ def _lake_drop_db(cfg, eng, ident):
     names = _database_names(ident)
     with eng.begin() as conn:
         for name in reversed(names):
+            logger.info("Dropping Lake test database %s", name)
             conn.exec_driver_sql(f"DROP DATABASE IF EXISTS `{name}`")
 
 

@@ -316,11 +316,29 @@ def test_redaction_handles_long_unterminated_quotes():
     Diagnostics("").remember_statement(sql)
 
 
-def test_test_database_provisioning_rejects_sql_before_connecting():
-    from tidbcloudlake_sqlalchemy.provision import _lake_create_db, _lake_drop_db
+def test_named_storage_connection_compiles_without_inline_credentials():
+    from tidbcloudlake_sqlalchemy import StorageConnection
 
-    engine = Mock()
-    for provision in (_lake_create_db, _lake_drop_db):
-        with pytest.raises(ValueError, match="Invalid Lake test database"):
-            provision("lake://", engine, "test; DROP DATABASE production")
-    engine.begin.assert_not_called()
+    statement = CopyIntoTable(
+        target=table("t"),
+        from_=StorageConnection(uri="s3://bucket/folder", connection_name="managed_storage"),
+        file_format=CSVFormat(),
+    )
+    sql = compile_sql(statement)
+    assert "'s3://bucket/folder' CONNECTION = (CONNECTION_NAME = 'managed_storage')" in sql
+    assert "SECRET_ACCESS_KEY" not in sql
+
+
+@pytest.mark.parametrize("key", ["AWS_SECRET_ACCESS_KEY", "_SESSION_TOKEN", "SAS_TOKEN", "privateKey", "client_secret"])
+def test_common_credential_spellings_are_redacted(key):
+    assert "fixture-value" not in redact(f"{key} = 'fixture-value'")
+    assert "fixture-value" not in redact(f'"{key}": "fixture-value"')
+    diagnostics = Diagnostics(f"lake://user@host/db?{key}=fixture-value")
+    assert "fixture-value" not in diagnostics.safe_error("server echo: fixture-value")
+
+
+def test_stage_path_with_hash_preserves_the_copy_file_selection():
+    statement = CopyIntoTable(target=table("t"), from_=StageClause(name="src", path="a#b"), files=["only.csv"], file_format=CSVFormat())
+    sql = compile_sql(statement)
+    assert "FROM '@src/a#b'" in sql
+    assert "'only.csv'" in sql

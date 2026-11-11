@@ -535,6 +535,23 @@ class _StorageClause(ClauseElement):
     pass
 
 
+class StorageConnection(_StorageClause):
+    """COPY URI that uses a named warehouse connection for storage credentials."""
+
+    __visit_name__ = "storage_connection"
+
+    def __init__(self, *, uri: str, connection_name: str):
+        parts = urlparse(uri)
+        if parts.scheme not in {"s3", "azblob", "gcs"} or not parts.netloc:
+            raise ValueError("Expected an S3, Azure, or GCS storage URI")
+        if parts.username is not None or parts.query or parts.fragment:
+            raise ValueError("Use a storage URI without embedded credentials or query parameters")
+        if not isinstance(connection_name, str) or not connection_name.strip():
+            raise ValueError("Expected a warehouse connection name")
+        self.uri = uri
+        self.connection_name = connection_name
+
+
 class AmazonS3(_StorageClause):
     """Amazon S3"""
 
