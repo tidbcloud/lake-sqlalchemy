@@ -46,3 +46,20 @@ def test_cluster_expression_handles_identifier_backslashes_and_string_escapes():
     table = Table('t', MetaData(), Column('id', Integer), lake_cluster_by=value)
     sql = str(CreateTable(table).compile(dialect=TiDBCloudLakeDialect()))
     assert 'CLUSTER BY ( ' + value + ' )' in sql
+
+
+@pytest.mark.parametrize("spatial_type", ["GEOMETRY", "GEOGRAPHY"])
+def test_spatial_srid_uses_integer_representation(spatial_type):
+    from tidbcloudlake_sqlalchemy import types
+
+    dialect = TiDBCloudLakeDialect()
+    spatial = getattr(types, spatial_type)
+    assert str(spatial(srid=4326).compile(dialect=dialect)) == f"{spatial_type}(SRID 4326)"
+    for srid in ("4326", True, 4326.5, 2**31):
+        with pytest.raises(CompileError, match="SRID"):
+            spatial(srid=srid).compile(dialect=dialect)
+
+
+def test_identifier_trailing_backslash_preserves_the_name():
+    preparer = TiDBCloudLakeDialect().identifier_preparer
+    assert preparer.quote_identifier("path\\") == "`path\\`"

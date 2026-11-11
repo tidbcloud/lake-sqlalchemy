@@ -7,22 +7,20 @@ from urllib.parse import parse_qsl, unquote, urlsplit, urlunsplit
 from sqlalchemy import event
 
 
+_SECRET_KEY = (
+    r"(?:access_?key(?:_?id)?|secret_?access_?key|secret_?key|key_?id|"
+    r"master_?key|security_?token|session_?token|sas_?token|account_?key|"
+    r"private_?key|api_?key|client_?secret|credential[s]?|password|access_?token|token)"
+)
+_SECRET_NAME = r"(?:[a-z0-9]+_)*_*" + _SECRET_KEY
+_SECRET_KEYS = re.compile(_SECRET_NAME, re.IGNORECASE)
 _ASSIGNMENT = re.compile(
-    r"\b(?:access_key_id|secret_access_key|master_key|security_token|account_key|"
-    r"credential|credentials|password|access_token|accesstoken|token)\s*=\s*",
+    r"(?<![\w])(?:['\"]?" + _SECRET_NAME + r"['\"]?)\s*[:=]\s*",
     re.IGNORECASE,
 )
 _QUOTE = re.compile(r"['\"]")
 _UNQUOTED_VALUE = re.compile(r"[^\s,)&]+")
 _URL = re.compile(r"(?<![A-Za-z0-9+.-])[A-Za-z0-9+.-]+://[^\s'\"<>]+")
-_SECRET_KEYS = {
-    "password",
-    "token",
-    "access_token",
-    "accesstoken",
-    "secret_access_key",
-    "security_token",
-}
 
 
 def _safe_url(match):
@@ -109,7 +107,7 @@ class Diagnostics:
             if parts.password:
                 self._secrets.update((parts.password, unquote(parts.password)))
             self._secrets.update(
-                v for k, v in parse_qsl(parts.query) if k.lower() in _SECRET_KEYS and v
+                v for k, v in parse_qsl(parts.query) if _SECRET_KEYS.fullmatch(k) and v
             )
         except ValueError:
             pass
@@ -128,6 +126,7 @@ class Diagnostics:
         self._secrets = set(self._connection_secrets)
         for start, end, quoted, closed in _assignment_values(sql):
             if not quoted:
+                self._secrets.add(sql[start:end])
                 continue
             quote = sql[start]
             value = sql[start + 1 : end - int(closed)]

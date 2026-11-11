@@ -1,22 +1,11 @@
-from logging import getLogger
-from os import environ
-
 from pytest import fixture
 from sqlalchemy import create_engine, text
 from sqlalchemy.engine.base import Connection, Engine
-
-LOGGER = getLogger(__name__)
 
 DATABASE_NAME = "default"
 USERNAME = "tidbcloudlake"
 PASSWORD = "tidbcloudlake"
 HOST_PORT = "localhost:8000"
-
-
-def must_env(var_name: str) -> str:
-    assert var_name in environ, f"Expected {var_name} to be provided in environment"
-    LOGGER.info(f"{var_name}: {environ[var_name]}")
-    return environ[var_name]
 
 
 @fixture(scope="session")

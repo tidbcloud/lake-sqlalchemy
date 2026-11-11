@@ -268,3 +268,18 @@ expression-list syntax (including CAST and quoted literals), but cannot close th
 list, append a statement/comment or introduce a subquery. Prefer SQLAlchemy
 expression objects for programmatic construction. Reflected options pass through
 the same validation when emitted as CREATE TABLE.
+
+
+Storage credentials for COPY
+----------------------------
+
+Use ``StageClause`` for an existing warehouse stage, or
+``StorageConnection(uri="s3://bucket/path", connection_name="managed_storage")``
+in the COPY source or destination. Create and grant access to the named
+connection in Lake. SQLAlchemy sends the URI and connection name, so storage
+credentials can be managed and rotated separately from application SQL.
+
+When rotating warehouse login credentials, configure the new credentials for
+new connections and dispose of the old SQLAlchemy engine pool after returning
+checked-out connections. The driver also supports a trusted token-file DSN
+option for file-backed rotation.

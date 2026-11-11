@@ -314,3 +314,31 @@ def test_redaction_handles_long_unterminated_quotes():
     sql = "PASSWORD='" + "''" * 100_000 + "dummy-secret"
     assert redact(sql) == "PASSWORD='***'"
     Diagnostics("").remember_statement(sql)
+
+
+def test_named_storage_connection_compiles_without_inline_credentials():
+    from tidbcloudlake_sqlalchemy import StorageConnection
+
+    statement = CopyIntoTable(
+        target=table("t"),
+        from_=StorageConnection(uri="s3://bucket/folder", connection_name="managed_storage"),
+        file_format=CSVFormat(),
+    )
+    sql = compile_sql(statement)
+    assert "'s3://bucket/folder' CONNECTION = (CONNECTION_NAME = 'managed_storage')" in sql
+    assert "SECRET_ACCESS_KEY" not in sql
+
+
+@pytest.mark.parametrize("key", ["AWS_SECRET_ACCESS_KEY", "_SESSION_TOKEN", "SAS_TOKEN", "privateKey", "client_secret"])
+def test_common_credential_spellings_are_redacted(key):
+    assert "fixture-value" not in redact(f"{key} = 'fixture-value'")
+    assert "fixture-value" not in redact(f'"{key}": "fixture-value"')
+    diagnostics = Diagnostics(f"lake://user@host/db?{key}=fixture-value")
+    assert "fixture-value" not in diagnostics.safe_error("server echo: fixture-value")
+
+
+def test_stage_path_with_hash_preserves_the_copy_file_selection():
+    statement = CopyIntoTable(target=table("t"), from_=StageClause(name="src", path="a#b"), files=["only.csv"], file_format=CSVFormat())
+    sql = compile_sql(statement)
+    assert "FROM '@src/a#b'" in sql
+    assert "'only.csv'" in sql

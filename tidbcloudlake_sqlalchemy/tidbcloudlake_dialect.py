@@ -880,6 +880,19 @@ colspecs = {
 class TiDBCloudLakeIdentifierPreparer(PGIdentifierPreparer):
     reserved_words = {r.lower() for r in RESERVED_WORDS}
 
+    def quote_identifier(self, value):
+        # Databend preserves backslashes in identifier values, but the double-quoted
+        # token lexer treats a backslash before a quote as an escape.
+        if any(
+            len(match.group()) % 2 and (match.end() == len(value) or value[match.end()] == '"')
+            for match in re.finditer(r'\\+', value)
+        ):
+            if "`" in value:
+                raise CompileError("Lake identifier cannot be quoted without changing its value")
+            escaped = value.replace("%", "%%") if self._double_percents else value
+            return f"`{escaped}`"
+        return super().quote_identifier(value)
+
     # overridden to exclude schema from sequence
     def format_sequence(
         self, sequence, use_schema: bool = True
@@ -1182,11 +1195,14 @@ class TiDBCloudLakeCompiler(PGCompiler):
             f")"
         )
 
+    def visit_storage_connection(self, storage, **kw):
+        return f"{self._copy_string(storage.uri)} CONNECTION = (CONNECTION_NAME = {self._copy_string(storage.connection_name)})"
+
     def visit_stage(self, stage, **kw):
         location = f"@{stage.name}/{stage.path}" if stage.path else f"@{stage.name}"
         # Databend file_location accepts a string literal beginning with '@'. Keep the existing
         # compact spelling for simple locations and quote locations containing token delimiters.
-        has_comment_marker = any(marker in location for marker in ("--", "/*", "*/"))
+        has_comment_marker = any(marker in location for marker in ("--", "/*", "*/", "#"))
         if not has_comment_marker and re.fullmatch(r"@[^\s,`;\"'()\\]+", location):
             return location.replace("%", "%%") if self.preparer._double_percents else location
         return self._copy_string(location)
@@ -1291,15 +1307,24 @@ class TiDBCloudLakeTypeCompiler(compiler.GenericTypeCompiler):
     def visit_BITMAP(self, type_, **kw):
         return "BITMAP"
 
+    def _spatial_type(self, name, srid):
+        if srid is None:
+            return name
+        try:
+            if isinstance(srid, bool):
+                raise TypeError
+            srid = operator.index(srid)
+        except TypeError:
+            raise CompileError(f"{name} SRID must be an integer") from None
+        if not -(2**31) <= srid < 2**31:
+            raise CompileError(f"{name} SRID must be a signed 32-bit integer")
+        return f"{name}(SRID {srid:d})"
+
     def visit_GEOMETRY(self, type_, **kw):
-        if type_.srid is not None:
-            return f"GEOMETRY(SRID {type_.srid})"
-        return "GEOMETRY"
+        return self._spatial_type("GEOMETRY", type_.srid)
 
     def visit_GEOGRAPHY(self, type_, **kw):
-        if type_.srid is not None:
-            return f"GEOGRAPHY(SRID {type_.srid})"
-        return "GEOGRAPHY"
+        return self._spatial_type("GEOGRAPHY", type_.srid)
 
 
 class TiDBCloudLakeDDLCompiler(compiler.DDLCompiler):
@@ -1474,10 +1499,8 @@ class TiDBCloudLakeDialect(default.DefaultDialect):
 
     @classmethod
     def import_dbapi(cls):
-        try:
-            import tidbcloudlake_sqlalchemy.connector as connector
-        except Exception:
-            import connector
+        from . import connector
+
         return connector
 
     def _get_server_version_info(self, connection):

@@ -21,6 +21,7 @@ from .dml import (
     ORCFormat,
     AVROFormat,
     AmazonS3,
+    StorageConnection,
     AzureBlobStorage,
     GoogleCloudStorage,
     FileColumnClause,

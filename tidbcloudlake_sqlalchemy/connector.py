@@ -146,12 +146,14 @@ class Connection:
             raise Error(self._diagnostics.safe_error(e)) from None
 
     def close(self):
-        pass
+        self.client = None
 
     def commit(self):
         pass
 
     def cursor(self):
+        if self.client is None:
+            raise Error("Connection is closed")
         try:
             return Cursor(self.client.cursor(), self._diagnostics)
         except Exception as e:
